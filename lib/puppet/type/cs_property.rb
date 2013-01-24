@@ -26,6 +26,17 @@ module Puppet
       isnamevar
     end
 
+    newparam(:cib) do
+      desc "Corosync applies its configuration immediately. Using a CIB allows
+            you to group multiple primitives and relationships to be applied at
+            once. This can be necessary to insert complex configurations into
+            Corosync correctly.
+
+            This paramater sets the CIB this order should be created in. A
+            cs_shadow resource with a title of the same name as this value should
+            also be added to your manifest."
+    end
+
     newproperty(:value) do
       desc "Value of the property.  It is expected that this will be a single
         value but we aren't validating string vs. integer vs. boolean because
@@ -35,5 +46,15 @@ module Puppet
     autorequire(:service) do
       [ 'corosync' ]
     end
+
+    autorequire(:cs_shadow) do
+      autos = []
+      if @parameters[:cib]
+        autos << @parameters[:cib].value
+      end
+
+      autos
+    end
+
   end
 end

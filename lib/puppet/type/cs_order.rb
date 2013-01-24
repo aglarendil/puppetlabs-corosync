@@ -20,14 +20,11 @@ module Puppet
     end
 
     newproperty(:first) do
-      desc "First Corosync primitive.  Just like colocation, our primitives for
-        ording come in pairs but this time order matters so we need to define
-        which primitive starts the desired state change chain."
+      desc "First Corosync primitive."
     end
 
     newproperty(:second) do
-      desc "Second Corosync primitive.  Our second primitive will move to the
-        desired state after the first primitive."
+      desc "Second Corosync primitive."
     end
 
     newparam(:cib) do
@@ -59,22 +56,15 @@ module Puppet
       [ 'corosync' ]
     end
 
-    autorequire(:cs_primitive) do
+    autorequire(:cs_resource) do
       autos = []
 
-      autos << unmunge_cs_primitive(@parameters[:first].should)
-      autos << unmunge_cs_primitive(@parameters[:second].should)
+      autos << @parameters[:first].should
+      autos << @parameters[:second].should
 
       autos
     end
 
-    def unmunge_cs_primitive(name)
-      name = name.split(':')[0]
-      if name.start_with? 'ms_'
-        name = name[3..-1]
-      end
 
-      name
-    end
   end
 end

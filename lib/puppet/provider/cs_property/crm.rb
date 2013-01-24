@@ -44,6 +44,7 @@ Puppet::Type.type(:cs_property).provide(:crm, :parent => Puppet::Provider::Coros
       :ensure => :present,
       :value  => @resource[:value],
     }
+    @property_hash[:cib] = @resource[:cib] if ! @resource[:cib].nil?
   end
 
   # Unlike create we actually immediately delete the item.
@@ -75,7 +76,7 @@ Puppet::Type.type(:cs_property).provide(:crm, :parent => Puppet::Provider::Coros
     unless @property_hash.empty?
       # clear this on properties, in case it's set from a previous
       # run of a different corosync type
-      ENV['CIB_shadow'] = nil
+      ENV['CIB_shadow'] = @resource[:cib]
       crm('configure', 'property', '$id="cib-bootstrap-options"', "#{@property_hash[:name]}=#{@property_hash[:value]}")
     end
   end

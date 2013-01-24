@@ -29,8 +29,8 @@ module Puppet
       [ 'corosync' ]
     end
 
-    autorequire(:cs_primitive) do
-      resources_with_cib :cs_primitive
+    autorequire(:cs_resource) do
+      resources_with_cib :cs_resource
     end
 
     autorequire(:cs_colocation) do

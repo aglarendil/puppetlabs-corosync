@@ -1,7 +1,7 @@
 require 'pathname'
 require Pathname.new(__FILE__).dirname.dirname.expand_path + 'corosync'
 
-Puppet::Type.type(:cs_primitive).provide(:crm, :parent => Puppet::Provider::Corosync) do
+Puppet::Type.type(:cs_resource).provide(:crm, :parent => Puppet::Provider::Corosync) do
   desc 'Specific provider for a rather specific type since I currently have no
         plan to abstract corosync/pacemaker vs. keepalived.  Primitives in
         Corosync are the thing we desire to monitor; websites, ipaddresses,
@@ -13,6 +13,64 @@ Puppet::Type.type(:cs_primitive).provide(:crm, :parent => Puppet::Provider::Coro
   # Path to the crm binary for interacting with the cluster configuration.
   commands :crm => 'crm'
   commands :crm_attribute => 'crm_attribute'
+  def rename_resource?(resource_name,should,cib=nil)
+    cmd =  [ command(:crm), 'configure', 'rename', resource_name, should ]
+    if cib
+      ENV['CIB_shadow'] = cib
+      raw, status = Puppet::Util::SUIDManager.run_and_capture(cmd)
+    else
+      raw, status = Puppet::Util::SUIDManager.run_and_capture(cmd)
+    end
+    debug("rename exit code is #{status}")
+    if status == 0
+      return true
+    else
+      return false
+    end
+  end
+
+  def try_to_rename_resource(resource_name,should,cib=nil,timeout=120)
+    Timeout::timeout(timeout) do
+      until rename_resource?(resource_name,should,cib)
+        debug("Trying to rename resource #{resource_name} to #{should}")
+        sleep 2
+      end
+      # Sleeping a spare two since it seems that dc-version is returning before
+      # It is really ready to take config changes, but it is close enough.
+      # Probably need to find a better way to check for reediness.
+      sleep 2
+    end
+  end
+
+  def deleted_resource?(resource_name,cib=nil)
+    cmd =  [ command(:crm), 'configure', 'delete', resource_name ]
+    debug("using CIB named #{cib}")
+    if cib
+      ENV['CIB_shadow'] = cib
+      raw, status = Puppet::Util::SUIDManager.run_and_capture(cmd)
+    else
+      raw, status = Puppet::Util::SUIDManager.run_and_capture(cmd)
+    end
+    debug("delete exit code is #{status}")
+    if status == 0
+      return true
+    else
+      return false
+    end
+  end
+
+  def try_to_delete_resource(resource_name,cib=nil,timeout=120)
+    Timeout::timeout(timeout) do
+      until deleted_resource?(resource_name,cib)
+        debug("Trying to delete resource #{resource_name} from #{cib}.")
+        sleep 2
+      end
+      # Sleeping a spare two since it seems that dc-version is returning before
+      # It is really ready to take config changes, but it is close enough.
+      # Probably need to find a better way to check for reediness.
+      sleep 2
+    end
+  end
 
   def self.instances
 
@@ -36,9 +94,9 @@ Puppet::Type.type(:cs_primitive).provide(:crm, :parent => Puppet::Provider::Coro
       items = e.attributes
       primitive.merge!({
         items['id'].to_sym => {
-          :class    => items['class'],
-          :type     => items['type'],
-          :provider => items['provider']
+        :class    => items['class'],
+        :type     => items['type'],
+        :provider => items['provider']
         }
       })
 
@@ -46,7 +104,7 @@ Puppet::Type.type(:cs_primitive).provide(:crm, :parent => Puppet::Provider::Coro
       primitive[items['id'].to_sym][:operations]  = {}
       primitive[items['id'].to_sym][:metadata]    = {}
       primitive[items['id'].to_sym][:ms_metadata] = {}
-      primitive[items['id'].to_sym][:promotable]  = :false
+      primitive[items['id'].to_sym][:multistate_hash]  = {}
 
       if ! e.elements['instance_attributes'].nil?
         e.elements['instance_attributes'].each_element do |i|
@@ -69,8 +127,9 @@ Puppet::Type.type(:cs_primitive).provide(:crm, :parent => Puppet::Provider::Coro
           end
         end
       end
-      if e.parent.name == 'master'
-        primitive[items['id'].to_sym][:promotable] = :true
+      if e.parent.name == 'master' or e.parent.name == 'clone'
+        primitive[items['id'].to_sym][:multistate_hash][:name] = e.parent.attributes['id'] unless  e.parent.attributes['id'] ==  "#{e.parent.name}_#{items['id'].to_sym}"
+        primitive[items['id'].to_sym][:multistate_hash][:type] = e.parent.name
         if ! e.parent.elements['meta_attributes'].nil?
           e.parent.elements['meta_attributes'].each_element do |m|
             primitive[items['id'].to_sym][:ms_metadata][(m.attributes['name'])] = m.attributes['value']
@@ -87,9 +146,10 @@ Puppet::Type.type(:cs_primitive).provide(:crm, :parent => Puppet::Provider::Coro
         :operations      => primitive.first[1][:operations],
         :metadata        => primitive.first[1][:metadata],
         :ms_metadata     => primitive.first[1][:ms_metadata],
-        :promotable      => primitive.first[1][:promotable],
+        :multistate_hash      => primitive.first[1][:multistate_hash],
         :provider        => self.name
       }
+
       instances << new(primitive_instance)
     end
     instances
@@ -104,7 +164,7 @@ Puppet::Type.type(:cs_primitive).provide(:crm, :parent => Puppet::Provider::Coro
       :primitive_class => @resource[:primitive_class],
       :provided_by     => @resource[:provided_by],
       :primitive_type  => @resource[:primitive_type],
-      :promotable      => @resource[:promotable]
+      :multistate_hash      => @resource[:multistate_hash],
     }
     @property_hash[:parameters] = @resource[:parameters] if ! @resource[:parameters].nil?
     @property_hash[:operations] = @resource[:operations] if ! @resource[:operations].nil?
@@ -118,8 +178,8 @@ Puppet::Type.type(:cs_primitive).provide(:crm, :parent => Puppet::Provider::Coro
   def destroy
     debug('Stopping primitive before removing it')
     crm('resource', 'stop', @resource[:name])
-    debug('Revmoving primitive')
-    crm('configure', 'delete', @resource[:name])
+    debug('Removing primitive')
+    try_to_delete_resource(@resource[:name])
     @property_hash.clear
   end
 
@@ -142,8 +202,8 @@ Puppet::Type.type(:cs_primitive).provide(:crm, :parent => Puppet::Provider::Coro
     @property_hash[:ms_metadata]
   end
 
-  def promotable
-    @property_hash[:promotable]
+  def multistate_hash
+    @property_hash[:multistate_hash]
   end
 
   # Our setters for parameters and operations.  Setters are used when the
@@ -165,15 +225,33 @@ Puppet::Type.type(:cs_primitive).provide(:crm, :parent => Puppet::Provider::Coro
     @property_hash[:ms_metadata] = should
   end
 
-  def promotable=(should)
-    case should
-    when :true
-      @property_hash[:promotable] = should
-    when :false
-      @property_hash[:promotable] = should
-      crm('resource', 'stop', "ms_#{@resource[:name]}")
-      crm('configure', 'delete', "ms_#{@resource[:name]}")
+  def multistate_hash=(should)
+    #Check if we use default multistate name 
+    #if it is empty
+    if should[:type] and  should[:name].to_s.empty?
+      newname = "#{should[:type]}_#{@property_hash[:name]}"
+    else
+      newname = should[:name]
     end
+    if (should[:type] != @property_hash[:multistate_hash][:type] and @property_hash[:multistate_hash][:type])
+      #If the type of resource has changed
+      #simply stop and delete it both in live
+      #and shadow cib
+
+      crm('resource', 'stop', "#{@property_hash[:multistate_hash][:name]}")
+      try_to_delete_resource(@property_hash[:multistate_hash][:name])
+      try_to_delete_resource(@property_hash[:multistate_hash][:name],@resource[:cib])
+    elsif
+      #otherwise, stop it and rename it both
+      #in shadow and live cib
+    (should[:type] == @property_hash[:multistate_hash][:type] and @property_hash[:multistate_hash][:type]  and
+    newname != @property_hash[:multistate_hash][:name])
+      crm('resource', 'stop', "#{@property_hash[:multistate_hash][:name]}")
+      try_to_rename_resource(@property_hash[:multistate_hash][:name],newname)
+      try_to_rename_resource(@property_hash[:multistate_hash][:name],newname,@resource[:cib])
+    end
+    @property_hash[:multistate_hash][:name] = newname
+    @property_hash[:multistate_hash][:type] = should[:type]
   end
 
   # Flush is triggered on anything that has been detected as being
@@ -212,9 +290,12 @@ Puppet::Type.type(:cs_primitive).provide(:crm, :parent => Puppet::Provider::Coro
       updated << "#{operations} " unless operations.nil?
       updated << "#{parameters} " unless parameters.nil?
       updated << "#{metadatas} " unless metadatas.nil?
-      if @property_hash[:promotable] == :true
+
+      if ( @property_hash[:multistate_hash][:type] == "master" or @property_hash[:multistate_hash][:type] == "clone" )
+        debug("creating multistate #{@property_hash[:multistate_hash][:type]} resource for #{@property_hash[:multistate_hash][:name]}")
+        crm_name =  @property_hash[:multistate_hash][:type] == "master" ? :ms : :clone
         updated << "\n"
-        updated << "ms ms_#{@property_hash[:name]} #{@property_hash[:name]} "
+        updated << " #{crm_name} #{@property_hash[:multistate_hash][:name]} #{@property_hash[:name]} "
         unless @property_hash[:ms_metadata].empty?
           updated << 'meta '
           @property_hash[:ms_metadata].each_pair do |k,v|
@@ -222,6 +303,7 @@ Puppet::Type.type(:cs_primitive).provide(:crm, :parent => Puppet::Provider::Coro
           end
         end
       end
+      debug("will update tmp file with #{updated}")
       Tempfile.open('puppet_crm_update') do |tmpfile|
         tmpfile.write(updated)
         tmpfile.flush
