@@ -27,7 +27,7 @@ describe Puppet::Type.type(:cs_resource) do
       end
     end
 
-    [:parameters, :operations, :metadata, :ms_metadata, :multistate].each do |property|
+    [:parameters, :operations, :ms_metadata, :multistate_hash].each do |property|
       it "should have a #{property} property" do
         subject.validproperty?(property).should be_true
       end
@@ -52,21 +52,13 @@ describe Puppet::Type.type(:cs_resource) do
       end
     end
 
-    it "should validate that the promotable attribute can be true/false" do
-      [:clone, :master, false].each do |value|
-        subject.new(
-          :name       => "mock_resource",
-          :multistate => value
-        )[:multistate].should == value.to_s.to_sym
-      end
-    end
 
-    it "should validate that the promotable attribute cannot be other values" do
+    it "should validate that the multistate_hash type attribute cannot be other values" do
       ["fail", 42].each do |value|
         expect { subject.new(
           :name       => "mock_resource",
-          :multistate => value
-        ) }.to raise_error Puppet::Error, /(master|clone|false)/
+          :multistate_hash => { :type=> value }
+        ) }.to raise_error Puppet::Error, /(master|clone|\'\')/
       end
     end
   end
