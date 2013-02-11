@@ -30,12 +30,14 @@ module Puppet
         script is ran periodically on each host to identify status, or to start
         and stop a particular application.  Ocf of the other hand is a script with
         meta-data and stucture that is specific to Corosync and Pacemaker."
+      isrequired
     end
     newparam(:primitive_type) do
       desc "Corosync primitive type.  Type generally matches to the specific
         'thing' your managing, i.e. ip address or vhost.  Though, they can be
         completely arbitarily named and manage any number of underlying
         applications or resources."
+      isrequired
     end
     newparam(:provided_by) do
       desc "Corosync primitive provider.  All resource agents used in a primitve
@@ -48,6 +50,7 @@ module Puppet
         from the command line has Corosync installed:
 
         * `crm configure ra providers <ra> <class>`"
+      isrequired
     end
 
     newparam(:cib) do

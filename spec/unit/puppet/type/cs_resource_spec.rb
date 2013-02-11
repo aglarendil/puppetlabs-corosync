@@ -48,7 +48,7 @@ describe Puppet::Type.type(:cs_resource) do
         expect { subject.new(
           :name       => "mock_resource",
           :parameters => "fail"
-        ) }.to raise_error Puppet::Error, /hash/
+        ) }.to raise_error(Puppet::Error, /hash/)
       end
     end
 
@@ -58,8 +58,38 @@ describe Puppet::Type.type(:cs_resource) do
         expect { subject.new(
           :name       => "mock_resource",
           :multistate_hash => { :type=> value }
-        ) }.to raise_error Puppet::Error, /(master|clone|\'\')/
+        ) }.to raise_error(Puppet::Error, /(master|clone|\'\')/)
       end
     end
   end
+  
+describe "when autorequiring resources" do
+
+  before :each do
+    @shadow = Puppet::Type.type(:cs_shadow).new(:name => 'baz',:cib=>"baz")
+    @catalog = Puppet::Resource::Catalog.new
+    @catalog.add_resource @shadow
+  end
+
+  it "should autorequire the corresponding resources" do
+
+    @resource = described_class.new(:name => 'dummy', :cib=>"baz")
+
+    @catalog.add_resource @resource
+    req = @resource.autorequire
+    req.size.should == 1
+    #rewrite this f*cking should method of property type by the ancestor method
+    [req[0].target,req[0].source].each do |instance|
+      class << instance
+        def should(*args)
+          Object.instance_method(:should).bind(self).call(*args)
+        end
+      end
+    end
+    req[0].target.should eql(@resource)
+    req[0].source.should eql(@shadow)
+  end
+
+end
+  
 end

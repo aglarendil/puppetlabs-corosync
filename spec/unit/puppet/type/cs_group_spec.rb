@@ -1,8 +1,8 @@
 require 'spec_helper'
 
-describe Puppet::Type.type(:cs_location) do
+describe Puppet::Type.type(:cs_group) do
   subject do
-    Puppet::Type.type(:cs_location)
+    Puppet::Type.type(:cs_group)
   end
 
   it "should have a 'name' parameter" do
@@ -11,8 +11,8 @@ describe Puppet::Type.type(:cs_location) do
 
   describe "basic structure" do
     it "should be able to create an instance" do
-      provider_class = Puppet::Type::Cs_location.provider(Puppet::Type::Cs_location.providers[0])
-      Puppet::Type::Cs_location.expects(:defaultprovider).returns(provider_class)
+      provider_class = Puppet::Type::Cs_group.provider(Puppet::Type::Cs_group.providers[0])
+      Puppet::Type::Cs_group.expects(:defaultprovider).returns(provider_class)
       subject.new(:name => "mock_resource").should_not be_nil
     end
 
@@ -26,7 +26,7 @@ describe Puppet::Type.type(:cs_location) do
       end
     end
 
-    [:primitive,:node_score,:rules,:node].each do |property|
+    [:primitives].each do |property|
       it "should have a #{property} property" do
         subject.validproperty?(property).should be_true
       end
@@ -36,24 +36,33 @@ describe Puppet::Type.type(:cs_location) do
 
     end
 
+    it "should validate that the primitives must be an array" do
+      ["1", ["1",]].each do |value|
+        expect { subject.new(
+          :name       => "mock_colocation",
+          :primitives => value
+          ) }.to raise_error(Puppet::Error, /array/)
+      end
+    end
   end
 
   describe "when autorequiring resources" do
 
     before :each do
       @csresource_foo = Puppet::Type.type(:cs_resource).new(:name => 'foo', :ensure => :present)
+      @csresource_bar = Puppet::Type.type(:cs_resource).new(:name => 'bar', :ensure => :present)
       @shadow = Puppet::Type.type(:cs_shadow).new(:name => 'baz',:cib=>"baz")
       @catalog = Puppet::Resource::Catalog.new
-      @catalog.add_resource @shadow, @csresource_foo
+      @catalog.add_resource @shadow, @csresource_bar, @csresource_foo
     end
 
     it "should autorequire the corresponding resources" do
 
-      @resource = described_class.new(:name => 'dummy', :primitive => 'foo', :cib=>"baz")
+      @resource = described_class.new(:name => 'dummy', :primitives => ['foo','bar'], :cib=>"baz")
 
       @catalog.add_resource @resource
       req = @resource.autorequire
-      req.size.should == 2
+      req.size.should == 3
       req.each do |e|
         #rewrite this f*cking should method of property type by the ancestor method
         class << e.target
@@ -62,7 +71,7 @@ describe Puppet::Type.type(:cs_location) do
           end
         end
         e.target.should eql(@resource)
-        [@csresource_foo,@shadow].should include(e.source)
+        [@csresource_bar,@csresource_foo,@shadow].should include(e.source)
       end
     end
 

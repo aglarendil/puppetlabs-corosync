@@ -36,6 +36,54 @@ describe Puppet::Type.type(:cs_colocation) do
 
     end
 
+    it "should validate the score values" do
+      ["fadsfasdf",Complex(1,1)].each do |value|
+        expect { subject.new(
+          :name       => "mock_colocation",
+          :primitives => ['foo','bar'],
+          :score => value
+          ) }.to raise_error(Puppet::Error)
+      end
+
+    end
+    it "should validate that the primitives must be a two_value array" do
+      ["1", ["1",],["1","2","3"]].each do |value|
+        expect { subject.new(
+          :name       => "mock_colocation",
+          :primitives => value
+          ) }.to raise_error(Puppet::Error, /array/)
+      end
+    end
   end
 
+  describe "when autorequiring resources" do
+
+    before :each do
+      @csresource_foo = Puppet::Type.type(:cs_resource).new(:name => 'foo', :ensure => :present)
+      @csresource_bar = Puppet::Type.type(:cs_resource).new(:name => 'bar', :ensure => :present)
+      @shadow = Puppet::Type.type(:cs_shadow).new(:name => 'baz',:cib=>"baz")
+      @catalog = Puppet::Resource::Catalog.new
+      @catalog.add_resource @shadow, @csresource_bar, @csresource_foo
+    end
+
+    it "should autorequire the corresponding resources" do
+
+      @resource = described_class.new(:name => 'dummy', :primitives => ['foo','bar'], :cib=>"baz", :score=>"inf")
+
+      @catalog.add_resource @resource
+      req = @resource.autorequire
+      req.size.should == 3
+      req.each do |e|
+        #rewrite this f*cking should method of property type by the ancestor method
+        class << e.target
+          def should(*args)
+            Object.instance_method(:should).bind(self).call(*args)
+          end
+        end
+        e.target.should eql(@resource)
+        [@csresource_bar,@csresource_foo,@shadow].should include(e.source)
+      end
+    end
+
+  end
 end

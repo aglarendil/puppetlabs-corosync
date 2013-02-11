@@ -1,8 +1,8 @@
 require 'spec_helper'
 
-describe Puppet::Type.type(:cs_location) do
+describe Puppet::Type.type(:cs_shadow) do
   subject do
-    Puppet::Type.type(:cs_location)
+    Puppet::Type.type(:cs_shadow)
   end
 
   it "should have a 'name' parameter" do
@@ -11,8 +11,9 @@ describe Puppet::Type.type(:cs_location) do
 
   describe "basic structure" do
     it "should be able to create an instance" do
-      provider_class = Puppet::Type::Cs_location.provider(Puppet::Type::Cs_location.providers[0])
-      Puppet::Type::Cs_location.expects(:defaultprovider).returns(provider_class)
+      provider_class = Puppet::Type::Cs_property.provider(Puppet::Type::Cs_property.providers[0])
+      Puppet::Type::Cs_property.expects(:defaultprovider).returns(provider_class)
+
       subject.new(:name => "mock_resource").should_not be_nil
     end
 
@@ -26,45 +27,42 @@ describe Puppet::Type.type(:cs_location) do
       end
     end
 
-    [:primitive,:node_score,:rules,:node].each do |property|
-      it "should have a #{property} property" do
-        subject.validproperty?(property).should be_true
-      end
-      it "should have documentation for its #{property} property" do
-        subject.propertybyname(property).doc.should be_instance_of(String)
-      end
+    it "should have a value property" do
+      subject.validproperty?(:value).should be_true
+    end
 
+    it "should have documentation for its value property" do
+      subject.propertybyname(:value).doc.should be_instance_of(String)
     end
 
   end
-
   describe "when autorequiring resources" do
 
     before :each do
-      @csresource_foo = Puppet::Type.type(:cs_resource).new(:name => 'foo', :ensure => :present)
       @shadow = Puppet::Type.type(:cs_shadow).new(:name => 'baz',:cib=>"baz")
       @catalog = Puppet::Resource::Catalog.new
-      @catalog.add_resource @shadow, @csresource_foo
+      @catalog.add_resource @shadow
     end
 
     it "should autorequire the corresponding resources" do
 
-      @resource = described_class.new(:name => 'dummy', :primitive => 'foo', :cib=>"baz")
+      @resource = described_class.new(:name => 'dummy', :value => 'foo', :cib=>"baz")
 
       @catalog.add_resource @resource
       req = @resource.autorequire
-      req.size.should == 2
-      req.each do |e|
-        #rewrite this f*cking should method of property type by the ancestor method
-        class << e.target
+      req.size.should == 1
+      #rewrite this f*cking should method of property type by the ancestor method
+      [req[0].target,req[0].source].each do |instance|
+        class << instance
           def should(*args)
             Object.instance_method(:should).bind(self).call(*args)
           end
         end
-        e.target.should eql(@resource)
-        [@csresource_foo,@shadow].should include(e.source)
       end
+      req[0].target.should eql(@resource)
+      req[0].source.should eql(@shadow)
     end
 
   end
+
 end

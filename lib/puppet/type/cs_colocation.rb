@@ -33,6 +33,7 @@ module Puppet
           @should
         end
       end
+      isrequired
     end
 
     newparam(:cib) do
@@ -54,10 +55,21 @@ module Puppet
         INFINITY."
 
       defaultto 'INFINITY'
+
+      validate do |value|
+        begin
+          if  value !~ /^([+-]){,1}(inf|INFINITY)$/
+            score = Integer(value)
+          end
+        rescue ArgumentError
+          raise Puppet::Error("score parameter is invalid, should be +/- INFINITY(or inf) or Integer")
+        end
+      end
+      isrequired
     end
 
     autorequire(:cs_shadow) do
-      [ @parameters[:cib] ]
+      [ @parameters[:cib].value ]
     end
 
     autorequire(:service) do

@@ -16,6 +16,7 @@ module Puppet
 
     newproperty(:primitive) do
       desc "Corosync primitive being managed."
+      isrequired
     end
 
     newparam(:cib) do
@@ -31,6 +32,16 @@ module Puppet
 
     newproperty(:node_score) do
       desc "The score for the node"
+      
+      validate do |value|
+        begin
+          if  value !~ /^([+-]){,1}(inf|INFINITY)$/
+            score = Integer(value)
+          end
+        rescue ArgumentError
+          raise Puppet::Error("score parameter is invalid, should be +/- INFINITY(or inf) or Integer")
+        end
+      end
     end
 
     newproperty(:rules, :array_matching=>:all) do
@@ -46,7 +57,7 @@ module Puppet
     end
     
     autorequire(:cs_shadow) do
-      [ @parameters[:cib] ]
+      [ @parameters[:cib].value ]
     end
 
     autorequire(:service) do
@@ -54,7 +65,7 @@ module Puppet
     end
 
     autorequire(:cs_resource) do
-      [ @parameters[:primitive] ]
+      [ @parameters[:primitive].value ]
     end
 
   end
