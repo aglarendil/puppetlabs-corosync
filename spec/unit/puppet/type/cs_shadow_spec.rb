@@ -11,13 +11,13 @@ describe Puppet::Type.type(:cs_shadow) do
 
   describe "basic structure" do
     it "should be able to create an instance" do
-      provider_class = Puppet::Type::Cs_property.provider(Puppet::Type::Cs_property.providers[0])
-      Puppet::Type::Cs_property.expects(:defaultprovider).returns(provider_class)
+      provider_class = Puppet::Type::Cs_shadow.provider(Puppet::Type::Cs_shadow.providers[0])
+      Puppet::Type::Cs_shadow.expects(:defaultprovider).returns(provider_class)
 
       subject.new(:name => "mock_resource").should_not be_nil
     end
 
-    [:cib, :name ].each do |param|
+    [:name,:isempty].each do |param|
       it "should have a #{param} parameter" do
         subject.validparameter?(param).should be_true
       end
@@ -26,41 +26,31 @@ describe Puppet::Type.type(:cs_shadow) do
         subject.paramclass(param).doc.should be_instance_of(String)
       end
     end
+    [:cib].each do |property|
+      it "should have a #{property} property" do
+        subject.validproperty?(property).should be_true
+      end
 
-    it "should have a value property" do
-      subject.validproperty?(:value).should be_true
-    end
-
-    it "should have documentation for its value property" do
-      subject.propertybyname(:value).doc.should be_instance_of(String)
+      it "should have documentation for its #{property} property" do
+        subject.propertybyname(property).doc.should be_instance_of(String)
+      end
     end
 
   end
+
   describe "when autorequiring resources" do
 
-    before :each do
-      @shadow = Puppet::Type.type(:cs_shadow).new(:name => 'baz',:cib=>"baz")
+    before do
       @catalog = Puppet::Resource::Catalog.new
-      @catalog.add_resource @shadow
+      @resource = described_class.new(:name => 'dummy', :cib=>"baz")
+      @catalog.add_resource @resource
     end
 
-    it "should autorequire the corresponding resources" do
+    it "should generate the cs_commit resource with correct name" do
+      generated = @resource.generate
+      generated[0].name == [@resource[:name]]
+      generated[0].class.should == Puppet::Type::Cs_commit
 
-      @resource = described_class.new(:name => 'dummy', :value => 'foo', :cib=>"baz")
-
-      @catalog.add_resource @resource
-      req = @resource.autorequire
-      req.size.should == 1
-      #rewrite this f*cking should method of property type by the ancestor method
-      [req[0].target,req[0].source].each do |instance|
-        class << instance
-          def should(*args)
-            Object.instance_method(:should).bind(self).call(*args)
-          end
-        end
-      end
-      req[0].target.should eql(@resource)
-      req[0].source.should eql(@shadow)
     end
 
   end
