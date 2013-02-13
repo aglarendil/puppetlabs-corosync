@@ -56,7 +56,6 @@ describe Puppet::Type.type(:cs_commit) do
       @resource=@shadow.generate[0]
       @catalog.add_resource @resource
       req = @resource.autorequire
-      puts(req.inspect)
       req.size.should == 7
       req.each do |e|
         #rewrite this f*cking should method of property type by the ancestor method
