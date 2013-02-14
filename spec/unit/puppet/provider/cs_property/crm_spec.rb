@@ -16,7 +16,8 @@ def mocked_instances
       :value      => property[:value],
       :provider   => :crm
     }
-    instances << Puppet::Type.type(:cs_property).new(property_instance)
+    instance = Puppet::Type::Cs_property::ProviderCrm.new(property_instance)
+    instances << instance
   end
   instances
 end
@@ -50,28 +51,8 @@ describe Puppet::Type.type(:cs_property).provider(:crm) do
   describe "#instances" do
     it "should find instances" do
       provider.class.stubs(:instances).returns(mocked_instances)
-      provider.class.instances.should include(Puppet::Type.type(:cs_property).new({:name=>"dc-version",:value=>"1.1.6-9971ebba4494012a93c03b40a2c58ec0eb60f50c", :ensure=>:present, :provider=>:crm}))
+      provider.class.instances.should include(Puppet::Type::Cs_property::ProviderCrm.new({:name=>"dc-version",:value=>"1.1.6-9971ebba4494012a93c03b40a2c58ec0eb60f50c", :ensure=>:present, :provider=>:crm}))
     end
-    
-    it "should try to create non-existing resource" do
-      resource[:value]='myvalue1'
-      provider.expects(:crm).with('configure', 'property', '$id="cib-bootstrap-options"', "myproperty=myvalue1")
-      provider.create
-      provider.flush
-    end
-    
-    it "should not try to create existing resource" do
-      resource[:name] = "dc-version"
-      resource[:value] =  "1.1.6-9971ebba4494012a93c03b40a2c58ec0eb60f50c"
-      #provider.expects(:crm).with('configure', 'property', '$id="cib-bootstrap-options"', "dc-version=1.1.6-9971ebba4494012a93c03b40a2c58ec0eb60f50c").never
-      provider.class.stubs(:instances).returns(mocked_instances)
-      provider.class.stubs(:block_until_ready).returns(true)
-      provider.class.prefetch(mocked_instances)
-      #provider.exists?.should be_true
-      #provider.create
-      #provider.flush
-    end
-    
   end
 
 end
