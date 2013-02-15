@@ -21,7 +21,7 @@ Puppet::Type.type(:cs_group).provide(:crm, :parent => Puppet::Provider::Corosync
     REXML::XPath.each(doc, '//group') do |e|
 
       items = e.attributes
-      group = { :name => items['id'].to_sym }
+      group = { :name => items['id'] }
 
       primitives = []
 

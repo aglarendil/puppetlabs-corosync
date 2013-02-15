@@ -186,7 +186,10 @@ Puppet::Type.type(:cs_location).provide(:crm, :parent => Puppet::Provider::Coros
               end
             end
           end
-          updated << "#{rule_hash[:boolean].to_s} " if rule_hash[:expressions] + rule_hash[:date_expressions]
+          rule_number = 0
+          rule_number += rule_hash[:expressions].size if !rule_hash[:expressions].nil?
+          rule_number += rule_hash[:expressions].size if !rule_hash[:date_expressions].nil? 
+          updated << "#{rule_hash[:boolean].to_s} " if rule_number > 1
         end
       end
       
